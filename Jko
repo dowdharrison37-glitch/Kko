@@ -1,0 +1,140 @@
+-- LocalScript (put in StarterPlayer -> StarterPlayerScripts)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+local character = player.Character or player.CharacterAdded:Wait()
+player.CharacterAdded:Connect(function(c) character = c end)
+
+local function waitForHRP()
+    character = player.Character or player.CharacterAdded:Wait()
+    return character:WaitForChild("HumanoidRootPart"), character:WaitForChild("Humanoid")
+end
+
+local hrp, humanoid = waitForHRP()
+
+-- Settings
+local FLY_SPEED = 80          -- horizontal move speed
+local ASCEND_SPEED = 60       -- vertical speed when pressing space/shift
+local SMOOTHING = 0.25        -- how quickly velocity changes (0-1), smaller = smoother
+local TOGGLE_KEY = Enum.KeyCode.F
+
+-- State
+local flying = false
+local bv, bg
+local input = { forward = 0, right = 0, up = 0 }
+local keys = { W=false, A=false, S=false, D=false, Space=false, LShift=false }
+
+-- Helper to create physics objects
+local function createFlightObjects(part)
+    bv = Instance.new("BodyVelocity")
+    bv.Name = "Fly_BodyVelocity"
+    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    bv.P = 1250
+    bv.Velocity = Vector3.new(0,0,0)
+    bv.Parent = part
+
+    bg = Instance.new("BodyGyro")
+    bg.Name = "Fly_BodyGyro"
+    bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    bg.P = 10000
+    bg.CFrame = part.CFrame
+    bg.Parent = part
+end
+
+local function destroyFlightObjects()
+    if bv then bv:Destroy(); bv = nil end
+    if bg then bg:Destroy(); bg = nil end
+end
+
+-- Toggle flight on/off
+local function setFlying(enabled)
+    if enabled == flying then return end
+    flying = enabled
+    humanoid = humanoid or (character and character:FindFirstChildOfClass("Humanoid"))
+    hrp = hrp or (character and character:FindFirstChild("HumanoidRootPart"))
+    if not humanoid or not hrp then return end
+
+    if enabled then
+        -- disable default physics interactions that mess with flight
+        humanoid.PlatformStand = true
+        createFlightObjects(hrp)
+    else
+        humanoid.PlatformStand = false
+        destroyFlightObjects()
+    end
+end
+
+-- Input handling
+UserInputService.InputBegan:Connect(function(inputObj, gameProcessed)
+    if gameProcessed then return end
+    if inputObj.KeyCode == TOGGLE_KEY then
+        setFlying(not flying)
+    end
+    if inputObj.KeyCode == Enum.KeyCode.W then keys.W = true end
+    if inputObj.KeyCode == Enum.KeyCode.A then keys.A = true end
+    if inputObj.KeyCode == Enum.KeyCode.S then keys.S = true end
+    if inputObj.KeyCode == Enum.KeyCode.D then keys.D = true end
+    if inputObj.KeyCode == Enum.KeyCode.Space then keys.Space = true end
+    if inputObj.KeyCode == Enum.KeyCode.LeftShift then keys.LShift = true end
+end)
+
+UserInputService.InputEnded:Connect(function(inputObj)
+    if inputObj.KeyCode == Enum.KeyCode.W then keys.W = false end
+    if inputObj.KeyCode == Enum.KeyCode.A then keys.A = false end
+    if inputObj.KeyCode == Enum.KeyCode.S then keys.S = false end
+    if inputObj.KeyCode == Enum.KeyCode.D then keys.D = false end
+    if inputObj.KeyCode == Enum.KeyCode.Space then keys.Space = false end
+    if inputObj.KeyCode == Enum.KeyCode.LeftShift then keys.LShift = false end
+end)
+
+-- Heartbeat update: compute desired velocity
+local currentVel = Vector3.new(0,0,0)
+RunService.RenderStepped:Connect(function(dt)
+    if not flying or not bv or not bg then return end
+    -- update hrp/humanoid references if character respawned
+    if not hrp.Parent then hrp, humanoid = waitForHRP() end
+
+    -- Camera-relative directions
+    local cam = workspace.CurrentCamera
+    local look = cam.CFrame.LookVector
+    local right = cam.CFrame.RightVector
+    -- flatten horizontal component
+    local forwardFlat = Vector3.new(look.X, 0, look.Z)
+    if forwardFlat.Magnitude > 0 then forwardFlat = forwardFlat.Unit end
+    local rightFlat = Vector3.new(right.X, 0, right.Z)
+    if rightFlat.Magnitude > 0 then rightFlat = rightFlat.Unit end
+
+    -- movement input
+    local mf = 0
+    local mr = 0
+    if keys.W then mf = mf + 1 end
+    if keys.S then mf = mf - 1 end
+    if keys.D then mr = mr + 1 end
+    if keys.A then mr = mr - 1 end
+
+    local horizontal = (forwardFlat * mf + rightFlat * mr)
+    if horizontal.Magnitude > 0 then horizontal = horizontal.Unit * FLY_SPEED else horizontal = Vector3.new(0,0,0) end
+
+    -- vertical input
+    local vert = 0
+    if keys.Space then vert = vert + 1 end
+    if keys.LShift then vert = vert - 1 end
+    local verticalVel = vert * ASCEND_SPEED
+
+    local desired = horizontal + Vector3.new(0, verticalVel, 0)
+
+    -- smoothing
+    currentVel = Vector3.new(
+        currentVel.X + (desired.X - currentVel.X) * math.clamp(SMOOTHING / math.max(dt, 0.001), 0, 1),
+        currentVel.Y + (desired.Y - currentVel.Y) * math.clamp(SMOOTHING / math.max(dt, 0.001), 0, 1),
+        currentVel.Z + (desired.Z - currentVel.Z) * math.clamp(SMOOTHING / math.max(dt, 0.001), 0, 1)
+    )
+
+    -- Apply to BodyVelocity
+    bv.Velocity = currentVel
+
+    -- Keep orientation aligned with camera direction (optional)
+    bg.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.CFrame.LookVector)
+end)
