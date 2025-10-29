@@ -1,2 +1,3 @@
 
-loadstring(game httpget('https://raw.githubusercontent.com/dowdharrison37-glitch/Kko/refs/heads/main/back%20up%20beta%203%20ty%20gd'))()')
+
+loadstring(game:HttpGet('https://raw.githubusercontent.com/dowdharrison37-glitch/Kko/refs/heads/main/back%20up%20beta%203%20ty%20gd'))()
