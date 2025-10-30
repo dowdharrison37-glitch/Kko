@@ -1,4 +1,3 @@
-
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -88,8 +87,49 @@ local StuffTab = Window:CreateTab("visuals and aimbot stuff", nil) -- Title, Ima
 local Section = StuffTab:CreateSection("esp")
 
 local Button = StuffTab:CreateButton({
-   Name = "esp",
+   Name = "aimbot",
    Callback = function()
-        loadstring(game httpget('https://raw.githubusercontent.com/dowdharrison37-glitch/Kko/refs/heads/main/dw%20abt%20it'))()
-   end,
+        -- LocalScript (StarterPlayerScripts) — single-player aim assist demo
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
+
+local TARGET_NAME = "Target" -- a Part in Workspace
+
+local smoothSpeed = 8     -- larger = faster snap
+local assistAngle = 10    -- degrees within which assist activates
+
+local function getTarget()
+    return workspace:FindFirstChild(TARGET_NAME)
+end
+
+local function aimAssistStep(dt)
+    local target = getTarget()
+    if not target then return end
+    if not camera or not camera.CFrame then return end
+
+    -- screen position of target
+    local targetPos = target.Position
+    local dirToTarget = (targetPos - camera.CFrame.p)
+    local lookVector = camera.CFrame.LookVector
+
+    local angle = math.deg(math.acos( math.clamp(lookVector:Dot(dirToTarget.Unit), -1, 1) ))
+
+    -- only apply assist when target is reasonably in front
+    if angle <= assistAngle then
+        local desiredCFrame = CFrame.new(camera.CFrame.p, targetPos)
+        -- slerp-like smoothing using interpolation of rotation
+        local current = camera.CFrame
+        local t = 1 - math.exp(-smoothSpeed * dt) -- smoothing factor independent of frame rate
+        camera.CFrame = current:Lerp(desiredCFrame, t)
+    end
+end
+
+RunService:BindToRenderStep("AimAssist", Enum.RenderPriority.Camera.Value + 1, aimAssistStep)
+
+        end,
 })
